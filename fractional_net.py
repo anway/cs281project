@@ -4,7 +4,6 @@ import autograd.numpy as np
 import autograd.numpy.random as npr
 from autograd.scipy.misc import logsumexp
 from autograd import grad
-from autograd.util import quick_grad_check
 from scipy import optimize
 import sys
 
@@ -84,25 +83,6 @@ def make_nn_funs(layer_sizes, L2_reg):
 
     return N, predictions, loss, frac_err
 
-
-def load_mnist():
-    print("Loading training data...")
-    import imp, urllib
-    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))
-    one_hot = lambda x, K: np.array(x[:,None] == np.arange(K)[None, :], dtype=int)
-    source, _ = urllib.urlretrieve(
-        'https://raw.githubusercontent.com/HIPS/Kayak/master/examples/data.py')
-    data = imp.load_source('data', source).mnist()
-    train_images, train_labels, test_images, test_labels = data
-    train_images = partial_flatten(train_images) / 255.0
-    test_images  = partial_flatten(test_images)  / 255.0
-    train_labels = one_hot(train_labels, 10)
-    test_labels = one_hot(test_labels, 10)
-    N_data = train_images.shape[0]
-
-    return N_data, train_images, train_labels, test_images, test_labels
-
-
 def make_batches(N_data, batch_size):
     return [slice(i, min(i+batch_size, N_data))
             for i in range(0, N_data, batch_size)]
@@ -115,45 +95,30 @@ if __name__ == '__main__':
 
     # Training parameters
     param_scale = 0.1
-    learning_rate = 0.01
-    momentum = 0.1
-    #batch_size = len(train_images)
-    num_epochs = 15000
 
-    # Load and process MNIST data (borrowing from Kayak)
-    #N_data, train_images, train_labels, test_images, test_labels = load_mnist()
-
+    # Load and process wines data
     N_data, train_images, train_labels, test_images, test_labels = get_wine_data()
     batch_size = len(train_images)
-    #train_images, test_images = np.array(zip(x1_train, x2_train)), np.array(zip(x1_test, x2_test))
-    #train_labels, test_labels = y_train_labels, y_test_labels
 
     # Make neural net functions
     N_weights, pred_fun, loss_fun, frac_err = make_nn_funs(layer_sizes, L2_reg)
+
+    # Gradient with respect to weights and alpha
     loss_grad_P = grad(loss_fun, 0)
-    #loss_grad_alpha = grad(loss_fun, 3)
 
     # Initialize weights
     rs = npr.RandomState(11)
     W = rs.randn(N_weights) * param_scale
-    #alpha = 1000000.
+
+    # Initialize alpha
     alpha = 0.
 
-    # Check the gradients numerically, just to be safe
-    # quick_grad_check(loss_fun, W, (train_images, train_labels))
-
-    #print("    Epoch      |    Train err  |   Test err  ")
     print("    Train err  |   Test err  |   Alpha")
+
     f_out = open(filename, 'w')
     f_out.write("    Train err  |   Test err  |   Alpha\n")
     f_out.close()
 
-    """
-    def print_perf(epoch, W):
-        test_perf  = frac_err(W, test_images, test_labels, alpha)
-        train_perf = frac_err(W, train_images, train_labels, alpha)
-        print("{0:15}|{1:15}|{2:15}".format(epoch, train_perf, test_perf))
-    """
     def print_perf(params):
         f_out = open(filename, 'a')
         test_perf  = frac_err(params, test_images, test_labels)
@@ -167,7 +132,6 @@ if __name__ == '__main__':
     train_errors = []
     test_errors = [] 
     for i in range(0, 100):
-        print(i)
         optimize.minimize(loss_fun, np.append(W, alpha), jac=loss_grad_P, method='L-BFGS-B', \
             args=(train_images, train_labels), options={'disp': True}, callback=print_perf)
 

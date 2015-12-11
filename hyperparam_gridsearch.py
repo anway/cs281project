@@ -4,7 +4,6 @@ import autograd.numpy as np
 import autograd.numpy.random as npr
 from autograd.scipy.misc import logsumexp
 from autograd import grad
-from autograd.util import quick_grad_check
 from scipy import optimize
 import matplotlib.pyplot as plt
 import sys
@@ -81,24 +80,6 @@ def make_nn_funs(layer_sizes, L2_reg):
     return N, predictions, loss, frac_err
 
 
-def load_mnist():
-    print("Loading training data...")
-    import imp, urllib
-    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))
-    one_hot = lambda x, K: np.array(x[:,None] == np.arange(K)[None, :], dtype=int)
-    source, _ = urllib.urlretrieve(
-        'https://raw.githubusercontent.com/HIPS/Kayak/master/examples/data.py')
-    data = imp.load_source('data', source).mnist()
-    train_images, train_labels, test_images, test_labels = data
-    train_images = partial_flatten(train_images) / 255.0
-    test_images  = partial_flatten(test_images)  / 255.0
-    train_labels = one_hot(train_labels, 10)
-    test_labels = one_hot(test_labels, 10)
-    N_data = train_images.shape[0]
-
-    return N_data, train_images, train_labels, test_images, test_labels
-
-
 def make_batches(N_data, batch_size):
     return [slice(i, min(i+batch_size, N_data))
             for i in range(0, N_data, batch_size)]
@@ -114,16 +95,14 @@ def run_nn(N, learning_rate, momentum, input_size, output_size):
     param_scale = 0.1
     num_epochs = 200
 
-    # Load and process MNIST data (borrowing from Kayak)
-    #N_data, train_images, train_labels, test_images, test_labels = load_mnist()
-
+    # Load and process wines data
     N_data, train_images, train_labels, test_images, test_labels = get_wine_data()
     batch_size = len(train_images)
-    #train_images, test_images = np.array(zip(x1_train, x2_train)), np.array(zip(x1_test, x2_test))
-    #train_labels, test_labels = y_train_labels, y_test_labels
 
     # Make neural net functions
     N_weights, pred_fun, loss_fun, frac_err = make_nn_funs(layer_sizes, L2_reg)
+
+    # Gradient with respect to weights
     loss_grad_W = grad(loss_fun, 0)
 
     # Initialize weights
@@ -159,12 +138,6 @@ def run_nn(N, learning_rate, momentum, input_size, output_size):
             cur_dir_W = momentum * cur_dir_W + (1.0 - momentum) * grad_W
             W = W - learning_rate * cur_dir_W
 
-            """
-            grad_alpha = loss_grad_alpha(W, train_images[idxs], train_labels[idxs], alpha)
-            cur_dir_alpha = momentum * cur_dir_alpha + (1.0 - momentum) * grad_alpha
-            alpha -= learning_rate * cur_dir_alpha
-            """
-
     final_test_err = loss_fun(W, train_images, train_labels)
     print(N, final_test_err)
     return final_test_err
@@ -172,11 +145,10 @@ def run_nn(N, learning_rate, momentum, input_size, output_size):
 if __name__ == '__main__':
     losses = {}
 
-    #learning_rate = 1e-5
     learning_rate = 1e-5
     momentum = 0.1
 
-    Ns = np.arange(3.0, 10.0, 1.0)
+    Ns = np.arange(3, 10, 1)
 
     for N in Ns:
         losses[N] = run_nn(N, learning_rate, momentum, 12, 3)
